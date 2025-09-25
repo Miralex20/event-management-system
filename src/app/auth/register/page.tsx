@@ -8,7 +8,6 @@ import { doc, setDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -38,7 +37,7 @@ export default function Register() {
         role: "student", // Default role
       });
       toast.success("Registration successful!");
-      router.push("/dashboard");
+      router.push("/dashboard/student");
     } catch (error) {
       toast.error("Registration failed: " + (error as Error).message);
     }
