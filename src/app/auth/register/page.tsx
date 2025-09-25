@@ -1,3 +1,4 @@
+// src/app/auth/register/page.tsx
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,85 +11,70 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 export default function Register() {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    displayName: "",
-    phoneNumber: "",
-    role: "student",
-  });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!phoneNumber) {
+      toast.error("Phone number is required");
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        formData.email,
-        formData.password
+        email,
+        password
       );
-      await updateProfile(userCredential.user, {
-        displayName: formData.displayName,
-      });
+      await updateProfile(userCredential.user, { displayName: name });
       await setDoc(doc(db, "users", userCredential.user.uid), {
-        email: formData.email,
-        displayName: formData.displayName,
-        phoneNumber: formData.phoneNumber,
-        role: formData.role,
-        createdAt: new Date().toISOString(),
+        email,
+        name,
+        phoneNumber,
+        role: "student", // Default role
       });
-      toast.success("Registration successful! Redirecting...");
-      router.push("/auth/login");
+      toast.success("Registration successful!");
+      router.push("/dashboard");
     } catch (error) {
-      toast.error("Registration failed. Please try again.");
+      toast.error("Registration failed: " + (error as Error).message);
     }
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto">
+    <div className="p-4">
       <form onSubmit={handleRegister} className="space-y-4">
         <Input
-          placeholder="Email"
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <Input
           type="email"
-          value={formData.email}
-          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
         />
         <Input
-          placeholder="Full Name"
-          value={formData.displayName}
-          onChange={(e) =>
-            setFormData({ ...formData, displayName: e.target.value })
-          }
-        />
-        <Input
+          type="tel"
           placeholder="Phone Number (e.g., +1234567890)"
-          value={formData.phoneNumber}
-          onChange={(e) =>
-            setFormData({ ...formData, phoneNumber: e.target.value })
-          }
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value)}
+          required
         />
         <Input
-          placeholder="Password"
           type="password"
-          value={formData.password}
-          onChange={(e) =>
-            setFormData({ ...formData, password: e.target.value })
-          }
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
         />
-        <select
-          value={formData.role}
-          onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-          className="w-full p-2 border rounded"
-        >
-          <option value="student">Student</option>
-          <option value="admin">Admin</option>
-        </select>
-        <Button
-          type="submit"
-          className="w-full bg-blue-500 text-white hover:bg-blue-600"
-        >
-          Register
-        </Button>
+        <Button type="submit">Register</Button>
       </form>
       <ToastContainer />
     </div>

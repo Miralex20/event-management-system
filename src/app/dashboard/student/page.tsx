@@ -27,7 +27,7 @@ export default function StudentDashboard() {
     venue: "",
     date: "",
     time: "",
-    participants: "",
+    organizerPhone: "",
   });
   const [feedbackText, setFeedbackText] = useState("");
   const router = useRouter();
@@ -58,17 +58,12 @@ export default function StudentDashboard() {
     e.preventDefault();
     if (!user) return;
     const dateTimeString = `${eventForm.date}T${eventForm.time}:00Z`;
-    const participantIds = eventForm.participants
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id);
     try {
       await submitEvent({
         eventTitle: eventForm.eventTitle,
         venue: eventForm.venue,
         dateTime: dateTimeString,
-        submittedBy: user.uid,
-        participants: participantIds,
+        organizerPhone: eventForm.organizerPhone,
       });
       toast.success("Event submitted successfully!");
       setEventForm({
@@ -76,7 +71,7 @@ export default function StudentDashboard() {
         venue: "",
         date: "",
         time: "",
-        participants: "",
+        organizerPhone: "",
       });
     } catch (error) {
       toast.error("Failed to submit event.");
@@ -99,7 +94,6 @@ export default function StudentDashboard() {
     try {
       await acceptEvent(eventId, user.uid);
       toast.success("Event accepted successfully!");
-      // Optionally update local state to reflect acceptance
       setEvents(
         events.map((event) =>
           event.id === eventId
@@ -160,7 +154,7 @@ export default function StudentDashboard() {
                     <Button
                       onClick={() => handleAcceptEvent(event.id)}
                       disabled={event.acceptedParticipants?.includes(user?.uid)}
-                      className="bg-green-500 text-white hover:bg-green-600 disabled:bg-gray-400"
+                      className="bg-green-500 text-white hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                       {event.acceptedParticipants?.includes(user?.uid)
                         ? "Accepted"
@@ -208,10 +202,11 @@ export default function StudentDashboard() {
               }
             />
             <Input
-              placeholder="Participant User IDs (comma-separated, e.g., user1, user2)"
-              value={eventForm.participants}
+              type="tel"
+              placeholder="Organizer Phone"
+              value={eventForm.organizerPhone}
               onChange={(e) =>
-                setEventForm({ ...eventForm, participants: e.target.value })
+                setEventForm({ ...eventForm, organizerPhone: e.target.value })
               }
             />
             <Button

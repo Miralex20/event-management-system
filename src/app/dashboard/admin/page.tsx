@@ -11,24 +11,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  onSnapshot,
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
+import { onSnapshot, collection, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { approveEvent, rejectEvent, scheduleNotification } from "@/lib/db";
+import { approveEvent, rejectEvent } from "@/lib/db";
 import { useRouter } from "next/navigation";
 import { ToastContainer, toast } from "react-toastify";
 
@@ -38,12 +24,9 @@ export default function AdminDashboard() {
   const [feedback, setFeedback] = useState<any[]>([]);
   const [rejectReason, setRejectReason] = useState("");
   const [approvedEvents, setApprovedEvents] = useState<any[]>([]);
-  const [scheduleForm, setScheduleForm] = useState({
-    eventId: "",
-    scheduledTime: "",
-    target: "targeted",
-  });
-  const [date, setDate] = useState<Date>(new Date());
+  const [notificationLoading, setNotificationLoading] = useState<string | null>(
+    null
+  );
   const router = useRouter();
 
   useEffect(() => {
@@ -51,10 +34,9 @@ export default function AdminDashboard() {
       getUserRole().then((role) => {
         if (role !== "admin") {
           toast.error("Access denied. Redirecting...");
-          router.push("/auth/login");
+          router.push("/dashboard/student");
         }
       });
-      // Pending events
       const unsubscribeEvents = onSnapshot(
         collection(db, "events"),
         (snapshot) => {
@@ -64,7 +46,6 @@ export default function AdminDashboard() {
           setEvents(pendingEvents);
         }
       );
-      // Approved events for scheduling
       const unsubscribeApproved = onSnapshot(
         query(collection(db, "events"), where("status", "==", "approved")),
         (snapshot) => {
@@ -73,7 +54,6 @@ export default function AdminDashboard() {
           );
         }
       );
-      // Feedback
       const unsubscribeFeedback = onSnapshot(
         collection(db, "feedback"),
         (snapshot) => {
@@ -116,25 +96,25 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleScheduleNotification = async () => {
-    if (!scheduleForm.eventId || !scheduleForm.scheduledTime) {
-      toast.error("Please select an event and scheduled time.");
-      return;
-    }
+  const handleTriggerNotification = async (eventId: string) => {
+    if (!user) return;
+    setNotificationLoading(eventId);
     try {
-      const scheduledTime = `${date.toISOString().split("T")[0]}T${
-        scheduleForm.scheduledTime
-      }:00Z`;
-      await scheduleNotification(
-        scheduleForm.eventId,
-        scheduledTime,
-        scheduleForm.target as "bulk" | "targeted"
-      );
-      toast.success("Notification scheduled successfully!");
-      setScheduleForm({ eventId: "", scheduledTime: "", target: "targeted" });
-      setDate(new Date());
+      const response = await fetch("/api/triggerNotification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId, adminId: user.uid }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Notifications sent to all participants!");
+      } else {
+        toast.error(data.error || "Failed to trigger notifications");
+      }
     } catch (error) {
-      toast.error("Failed to schedule notification.");
+      toast.error("Failed to trigger notifications");
+    } finally {
+      setNotificationLoading(null);
     }
   };
 
@@ -153,6 +133,7 @@ export default function AdminDashboard() {
                 <TableHead>Title</TableHead>
                 <TableHead>Venue</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Organizer Phone</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -162,13 +143,19 @@ export default function AdminDashboard() {
                   <TableCell>{event.eventTitle}</TableCell>
                   <TableCell>{event.venue}</TableCell>
                   <TableCell>
-                    {new Date(event.date.seconds * 1000).toLocaleDateString()}
+                    {event.date instanceof Date
+                      ? event.date.toLocaleDateString()
+                      : new Date(
+                          event.date?.seconds * 1000
+                        ).toLocaleDateString()}
                   </TableCell>
+                  <TableCell>{event.organizerPhone}</TableCell>
                   <TableCell>
                     <div className="space-x-2">
                       <Button
                         onClick={() => handleApprove(event.id)}
                         className="bg-green-500 text-white hover:bg-green-600"
+                        disabled={event.status === "approved"}
                       >
                         Approve
                       </Button>
@@ -194,67 +181,47 @@ export default function AdminDashboard() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Schedule Notification for Approved Events</CardTitle>
+          <CardTitle>Approved Events</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <Select
-              value={scheduleForm.eventId}
-              onValueChange={(value) =>
-                setScheduleForm({ ...scheduleForm, eventId: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select approved event" />
-              </SelectTrigger>
-              <SelectContent>
-                {approvedEvents.map((event) => (
-                  <SelectItem key={event.id} value={event.id}>
-                    {event.eventTitle}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={setDate}
-              className="rounded-md border"
-            />
-            <Input
-              type="time"
-              value={scheduleForm.scheduledTime}
-              onChange={(e) =>
-                setScheduleForm({
-                  ...scheduleForm,
-                  scheduledTime: e.target.value,
-                })
-              }
-              placeholder="Select time"
-            />
-            <Select
-              value={scheduleForm.target}
-              onValueChange={(value) =>
-                setScheduleForm({ ...scheduleForm, target: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Target" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="targeted">
-                  Targeted (Accepted Participants)
-                </SelectItem>
-                <SelectItem value="bulk">Bulk (All Students)</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={handleScheduleNotification}
-              className="w-full bg-purple-500 text-white hover:bg-purple-600"
-            >
-              Schedule Notification
-            </Button>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Venue</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Organizer Phone</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {approvedEvents.map((event) => (
+                <TableRow key={event.id}>
+                  <TableCell>{event.eventTitle}</TableCell>
+                  <TableCell>{event.venue}</TableCell>
+                  <TableCell>
+                    {event.date instanceof Date
+                      ? event.date.toLocaleDateString()
+                      : new Date(
+                          event.date?.seconds * 1000
+                        ).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>{event.organizerPhone}</TableCell>
+                  <TableCell>
+                    <Button
+                      onClick={() => handleTriggerNotification(event.id)}
+                      className="bg-blue-500 text-white hover:bg-blue-600"
+                      disabled={notificationLoading === event.id}
+                    >
+                      {notificationLoading === event.id
+                        ? "Sending..."
+                        : "Trigger Notification"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
       <Card>
@@ -267,7 +234,6 @@ export default function AdminDashboard() {
               <TableRow>
                 <TableHead>Feedback</TableHead>
                 <TableHead>Submitted By</TableHead>
-                <TableHead>Phone Number</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
             </TableHeader>
@@ -276,7 +242,6 @@ export default function AdminDashboard() {
                 <TableRow key={item.id}>
                   <TableCell>{item.text}</TableCell>
                   <TableCell>{item.submittedBy}</TableCell>
-                  <TableCell>{item.phoneNumber}</TableCell>
                   <TableCell>
                     {new Date(item.createdAt).toLocaleDateString()}
                   </TableCell>
